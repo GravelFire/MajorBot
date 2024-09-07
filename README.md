@@ -19,7 +19,7 @@
 |                    Auto Claim Task                       |     ✅     |
 |                     Auto Roulette                        |     ✅     |
 |                  Auto Daily Streak                       |     ✅     |
-|              Support for pyrogram .session               |     ✅     |
+|              Support for telethon .session               |     ✅     |
 
 
 ## [Settings](https://github.com/GravelFire/MajorBot/blob/main/.env-example/)
