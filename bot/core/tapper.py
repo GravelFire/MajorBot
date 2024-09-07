@@ -101,35 +101,6 @@ class Tapper:
                     logger.info(f"{self.session_name} | Joined to channel: <y>{link}</y>")
                 except Exception as e:
                     logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
-        
-        # async with self.tg_client as client:
-        #     try:
-        #         chat = await client(functions.messages.CheckChatInviteRequest(hash=link))
-        #         chat_username = chat.chat.username if hasattr(chat.chat, 'username') else link
-        #         chat_id = chat.chat.id
-
-        #         try:
-        #             await client(functions.channels.GetParticipantRequest(channel=chat_id, user_id='me'))
-        #         except Exception as error:
-        #             if isinstance(error, types.rpc_error.UserNotParticipantError):
-        #                 await asyncio.sleep(delay=3)
-        #                 response = await client(functions.channels.JoinChannelRequest(channel=chat_id))
-        #                 logger.info(f"{self.session_name} | Joined to channel: <y>{response.chats[0].username}</y>")
-                        
-        #                 try:
-        #                     await client(functions.account.UpdateNotifySettingsRequest(
-        #                         peer=chat_id,
-        #                         settings=types.InputPeerNotifySettings(mute_until=2147483647)
-        #                     ))
-        #                     logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
-        #                 except Exception as e:
-        #                     logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
-        #             else:
-        #                 logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
-        #     except errors.InviteHashExpiredError:
-        #         logger.warning(f"{self.session_name} | The invite link for chat <y>{link}</y> has expired or is no longer valid.")
-        #     except Exception as error:
-        #         logger.error(f"{self.session_name} | (Task) Error while join tg channel: {error}")
     
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
