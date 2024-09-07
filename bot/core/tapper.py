@@ -85,42 +85,43 @@ class Tapper:
         
         
     async def join_and_mute_tg_channel(self, link: str):
-        link = link if 'https://t.me/+' in link else link[13:]
-        if not self.tg_client.is_connected:
-            try:
-                await self.tg_client.connect()
-            except Exception as error:
-                logger.error(f"{self.session_name} | (Task) Connect failed: {error}")
-        try:
-            chat = await self.tg_client.get_entity(link)
-            chat_username = chat.username if hasattr(chat, 'username') else link
-            chat_id = chat.id
-            try:
-                await self.tg_client.get_permissions(chat)
-            except Exception as error:
-                if 'CHAT_FORBIDDEN' in str(error):
-                    await asyncio.sleep(delay=3)
-                    if '+' in link:
-                        response = await self.tg_client(InviteToChannelRequest(link))
-                    else:
-                        response = await self.tg_client(JoinChannelRequest(chat))
-                    logger.info(f"{self.session_name} | Joined to channel: <y>{chat_username}</y>")
+        return 'No work, later'
+        # link = link if 'https://t.me/+' in link else link[13:]
+        # if not self.tg_client.is_connected:
+        #     try:
+        #         await self.tg_client.connect()
+        #     except Exception as error:
+        #         logger.error(f"{self.session_name} | (Task) Connect failed: {error}")
+        # try:
+        #     chat = await self.tg_client.get_entity(link)
+        #     chat_username = chat.username if hasattr(chat, 'username') else link
+        #     chat_id = chat.id
+        #     try:
+        #         await self.tg_client.get_permissions(chat)
+        #     except Exception as error:
+        #         if 'CHAT_FORBIDDEN' in str(error):
+        #             await asyncio.sleep(delay=3)
+        #             if '+' in link:
+        #                 response = await self.tg_client(InviteToChannelRequest(link))
+        #             else:
+        #                 response = await self.tg_client(JoinChannelRequest(chat))
+        #             logger.info(f"{self.session_name} | Joined to channel: <y>{chat_username}</y>")
                     
-                    try:
-                        await self.tg_client(UpdateNotifySettingsRequest(
-                            peer=InputNotifyPeer(peer=chat),
-                            settings=InputPeerNotifySettings(mute_until=2147483647)
-                        ))
-                        logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
-                    except Exception as e:
-                        logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
-                else:
-                    logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
+        #             try:
+        #                 await self.tg_client(UpdateNotifySettingsRequest(
+        #                     peer=InputNotifyPeer(peer=chat),
+        #                     settings=InputPeerNotifySettings(mute_until=2147483647)
+        #                 ))
+        #                 logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
+        #             except Exception as e:
+        #                 logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
+        #         else:
+        #             logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
 
-            if self.tg_client.is_connected:
-                await self.tg_client.disconnect()
-        except Exception as error:
-            logger.error(f"{self.session_name} | (Task) Error while join tg channel: {error}")
+        #     if self.tg_client.is_connected:
+        #         await self.tg_client.disconnect()
+        # except Exception as error:
+        #     logger.error(f"{self.session_name} | (Task) Error while join tg channel: {error}")
 
     
     @error_handler
