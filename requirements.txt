@@ -1,8 +1,8 @@
 aiohttp~=3.9.5
-aiocfscrape~=1.0.0
+aiohttp-proxy==0.1.2
 Telethon~=1.36.0
 loguru~=0.7.2
 PySocks
 better_proxy
-pydantic_settings
-aiohttp_proxy
+pydantic==2.6.4
+pydantic-settings==2.2.1
