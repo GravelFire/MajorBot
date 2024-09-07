@@ -72,7 +72,7 @@ async def process() -> None:
                 break
 
     if action == 1:
-        await run_tasks(tg_clients=tg_clients)
+        await run_tasks()
 
     elif action == 2:
         await register_sessions()

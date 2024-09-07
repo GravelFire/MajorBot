@@ -67,19 +67,19 @@ class Tapper:
         self.tg_client_id = 0
 
     async def get_tg_web_data(self) -> str:
-        await self.app.connect()
+        await self.tg_client.connect()
         ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "339631649"
-        app_info = await self.app(RequestAppWebViewRequest(
+        app_info = await self.tg_client(RequestAppWebViewRequest(
             'me',
-            InputBotAppShortName(await self.app.get_input_entity('major'), 'join'),
+            InputBotAppShortName(await self.tg_client.get_input_entity('major'), 'start'),
             'android',
             start_param=ref_id
         ))
         web_data = unquote(string=unquote(string=app_info.url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
-        get_me = await self.app.get_me()
+        get_me = await self.tg_client.get_me()
         self.tg_client_id = get_me.id
             
-        await self.app.disconnect()
+        await self.tg_client.disconnect()
         
         return ref_id, web_data
         
