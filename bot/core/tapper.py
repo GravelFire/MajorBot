@@ -55,7 +55,6 @@ class Tapper:
     
     def __init__(self, session_name: str, proxy: str):
         self.proxy = proxy
-        self.proxy = proxy
         if self.proxy:
             proxy = Proxy.from_str(proxy)
             proxy_dict = proxy_to_dict(proxy)

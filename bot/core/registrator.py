@@ -22,7 +22,7 @@ async def register_sessions() -> None:
         api_hash=API_HASH
     )
 
-    async with session:
-        user_data = await session.get_me()
+    session.start(password=lambda: input('Please enter your password: '))
+    user_data = await session.get_me()
 
     logger.success(f'Session added successfully @{user_data.username} | {user_data.first_name} {user_data.last_name}')
