@@ -31,9 +31,9 @@ global tg_clients
 
 
 def get_session_names() -> list[str]:
-    session_names = sorted(glob.glob("sessions/*.session"))
+    session_files = [f for f in os.listdir('sessions') if f.endswith('.session')]
     session_names = [
-        os.path.splitext(os.path.basename(file))[0] for file in session_names
+        os.path.join('sessions', os.path.splitext(session_file)[0]) for session_file in session_files
     ]
 
     return session_names
@@ -47,31 +47,6 @@ def get_proxies() -> list[Proxy]:
         proxies = []
 
     return proxies
-
-
-async def get_tg_clients() -> list[Client]:
-    global tg_clients
-
-    session_names = get_session_names()
-
-    if not session_names:
-        raise FileNotFoundError("Not found session files")
-
-    if not settings.API_ID or not settings.API_HASH:
-        raise ValueError("API_ID and API_HASH not found in the .env file.")
-
-    tg_clients = [
-        Client(
-            name=session_name,
-            api_id=settings.API_ID,
-            api_hash=settings.API_HASH,
-            workdir="sessions/",
-            plugins=dict(root="bot/plugins"),
-        )
-        for session_name in session_names
-    ]
-
-    return tg_clients
 
 
 async def process() -> None:
@@ -97,8 +72,6 @@ async def process() -> None:
                 break
 
     if action == 1:
-        tg_clients = await get_tg_clients()
-
         await run_tasks(tg_clients=tg_clients)
 
     elif action == 2:
@@ -107,17 +80,12 @@ async def process() -> None:
 
 
 
-async def run_tasks(tg_clients: list[Client]):
+async def run_tasks():
     proxies = get_proxies()
     proxies_cycle = cycle(proxies) if proxies else None
-    tasks = [
-        asyncio.create_task(
-            run_tapper(
-                tg_client=tg_client,
-                proxy=next(proxies_cycle) if proxies_cycle else None,
-            )
-        )
-        for tg_client in tg_clients
-    ]
+    tasks = []
+    for session_name in get_session_names():
+        task = asyncio.create_task(run_tapper(session_name, next(proxies_cycle) if proxies_cycle else None))
+        tasks.append(task)
 
     await asyncio.gather(*tasks)

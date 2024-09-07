@@ -5,13 +5,14 @@ from urllib.parse import unquote
 import aiohttp
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
-from pyrogram import Client
-from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
-from pyrogram.raw.functions.messages import RequestAppWebView
-from pyrogram.raw.functions import account
+from telethon.tl.functions.messages import RequestAppWebViewRequest
+from telethon.tl.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer
+from telethon import TelegramClient
+from telethon.tl.functions.channels import JoinChannelRequest, InviteToChannelRequest
+from telethon.tl.functions.account import UpdateNotifySettingsRequest
 import json
-from pyrogram.raw.types import InputBotAppShortName, InputNotifyPeer, InputPeerNotifySettings
 from .agents import generate_random_user_agent
+import socks
 from bot.config import settings
 from typing import Any, Callable
 import functools
@@ -29,76 +30,58 @@ def error_handler(func: Callable):
             await asyncio.sleep(1)
     return wrapper
 
+
+def proxy_to_dict(proxy: Proxy) -> dict:
+    proxy_type_map = {
+        'http': socks.HTTP,
+        'socks': socks.SOCKS5
+    }
+
+    proxy_dict = {
+        'proxy_type': proxy_type_map.get(proxy.protocol, socks.HTTP),
+        'addr': proxy.host,
+        'port': proxy.port,
+    }
+
+    if proxy.login:
+        proxy_dict['username'] = proxy.login
+    if proxy.password:
+        proxy_dict['password'] = proxy.password
+
+    return proxy_dict
+
+
+
 class Tapper:
-    def __init__(self, tg_client: Client, proxy: str):
-        self.tg_client = tg_client
-        self.session_name = tg_client.name
+    
+    def __init__(self, session_name: str, proxy: str):
         self.proxy = proxy
-        self.tg_web_data = None
+        self.proxy = proxy
+        if self.proxy:
+            proxy = Proxy.from_str(proxy)
+            proxy_dict = proxy_to_dict(proxy)
+        else:
+            proxy_dict = None
+        self.tg_client = TelegramClient(session_name, api_id=settings.API_ID, api_hash=settings.API_HASH, proxy=proxy_dict)
+        self.session_name = session_name
         self.tg_client_id = 0
 
     async def get_tg_web_data(self) -> str:
+        await self.app.connect()
+        ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "339631649"
+        app_info = await self.app(RequestAppWebViewRequest(
+            'me',
+            InputBotAppShortName(await self.app.get_input_entity('major'), 'join'),
+            'android',
+            start_param=ref_id
+        ))
+        web_data = unquote(string=unquote(string=app_info.url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
+        get_me = await self.app.get_me()
+        self.tg_client_id = get_me.id
+            
+        await self.app.disconnect()
         
-        if self.proxy:
-            proxy = Proxy.from_str(self.proxy)
-            proxy_dict = dict(
-                scheme=proxy.protocol,
-                hostname=proxy.host,
-                port=proxy.port,
-                username=proxy.login,
-                password=proxy.password
-            )
-        else:
-            proxy_dict = None
-
-        self.tg_client.proxy = proxy_dict
-
-        try:
-            if not self.tg_client.is_connected:
-                try:
-                    await self.tg_client.connect()
-
-                except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
-                    raise InvalidSession(self.session_name)
-            
-            while True:
-                try:
-                    peer = await self.tg_client.resolve_peer('major')
-                    break
-                except FloodWait as fl:
-                    fls = fl.value
-
-                    logger.warning(f"{self.session_name} | FloodWait {fl}")
-                    logger.info(f"{self.session_name} | Sleep {fls}s")
-                    await asyncio.sleep(fls + 3)
-            
-            ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "339631649"
-            
-            web_view = await self.tg_client.invoke(RequestAppWebView(
-                peer=peer,
-                app=InputBotAppShortName(bot_id=peer, short_name="start"),
-                platform='android',
-                write_allowed=True,
-                start_param=ref_id
-            ))
-
-            auth_url = web_view.url
-            tg_web_data = unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
-
-            me = await self.tg_client.get_me()
-            self.tg_client_id = me.id
-            
-            if self.tg_client.is_connected:
-                await self.tg_client.disconnect()
-
-            return ref_id, tg_web_data
-
-        except InvalidSession as error:
-            raise error
-
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error: {error}")
-            await asyncio.sleep(delay=3)
+        return ref_id, web_data
         
         
     async def join_and_mute_tg_channel(self, link: str):
@@ -109,28 +92,28 @@ class Tapper:
             except Exception as error:
                 logger.error(f"{self.session_name} | (Task) Connect failed: {error}")
         try:
-            chat = await self.tg_client.get_chat(link)
-            chat_username = chat.username if chat.username else link
+            chat = await self.tg_client.get_entity(link)
+            chat_username = chat.username if hasattr(chat, 'username') else link
             chat_id = chat.id
             try:
-                await self.tg_client.get_chat_member(chat.username, "me")
+                await self.tg_client.get_permissions(chat)
             except Exception as error:
-                if error.ID == 'USER_NOT_PARTICIPANT':
+                if 'CHAT_FORBIDDEN' in str(error):
                     await asyncio.sleep(delay=3)
-                    response = await self.tg_client.join_chat(link)
-                    logger.info(f"{self.session_name} | Joined to channel: <y>{response.username}</y>")
+                    if '+' in link:
+                        response = await self.tg_client(InviteToChannelRequest(link))
+                    else:
+                        response = await self.tg_client(JoinChannelRequest(chat))
+                    logger.info(f"{self.session_name} | Joined to channel: <y>{chat_username}</y>")
                     
                     try:
-                        peer = await self.tg_client.resolve_peer(chat_id)
-                        await self.tg_client.invoke(account.UpdateNotifySettings(
-                            peer=InputNotifyPeer(peer=peer),
+                        await self.tg_client(UpdateNotifySettingsRequest(
+                            peer=InputNotifyPeer(peer=chat),
                             settings=InputPeerNotifySettings(mute_until=2147483647)
                         ))
                         logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
                     except Exception as e:
                         logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
-                    
-                    
                 else:
                     logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
 
@@ -368,10 +351,9 @@ class Tapper:
             await asyncio.sleep(delay=sleep_time)    
             
         
-            
 
-async def run_tapper(tg_client: Client, proxy: str | None):
+async def run_tapper(session_name: str, proxy: str | None):
     try:
-        await Tapper(tg_client=tg_client, proxy=proxy).run()
+        await Tapper(session_name=session_name, proxy=proxy).run()
     except InvalidSession:
-        logger.error(f"{tg_client.name} | Invalid Session")
+        logger.error(f"{session_name} | Invalid Session")

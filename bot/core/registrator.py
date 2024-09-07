@@ -1,4 +1,4 @@
-from pyrogram import Client
+from telethon import TelegramClient
 
 from bot.config import settings
 from bot.utils import logger
@@ -16,11 +16,10 @@ async def register_sessions() -> None:
     if not session_name:
         return None
 
-    session = Client(
-        name=session_name,
+    session = TelegramClient(
+        session=f"sessions/{session_name}",
         api_id=API_ID,
-        api_hash=API_HASH,
-        workdir="sessions/"
+        api_hash=API_HASH
     )
 
     async with session:
