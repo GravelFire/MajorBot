@@ -7,9 +7,8 @@ from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from telethon.tl.functions.messages import RequestAppWebViewRequest
 from telethon.tl.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer
-from telethon import TelegramClient
-from telethon.tl.functions.channels import JoinChannelRequest, InviteToChannelRequest
-from telethon.tl.functions.account import UpdateNotifySettingsRequest
+from telethon import TelegramClient, functions, types
+from telethon import errors
 import json
 from .agents import generate_random_user_agent
 import socks
@@ -85,44 +84,53 @@ class Tapper:
         
         
     async def join_and_mute_tg_channel(self, link: str):
-        return 'No work, later'
-        # link = link if 'https://t.me/+' in link else link[13:]
-        # if not self.tg_client.is_connected:
+        link = link if 'https://t.me/+' in link else link[13:]
+        async with self.tg_client as client:
+
+            if 'https://t.me/+' in link:
+                try:
+                    invite_hash = link.split('/+')[-1]
+                    result = await client(functions.messages.ImportChatInviteRequest(hash=invite_hash))
+                    logger.info(f"{self.session_name} | Joined to channel: <y>{result.chats[0].title}</y>")
+                    await asyncio.sleep(random.randint(10, 20))
+
+                except Exception as e:
+                    logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
+            else:
+                try:
+                    await client(functions.channels.JoinChannelRequest(channel='@'+link))
+                    logger.info(f"{self.session_name} | Joined to channel: <y>{link}</y>")
+                except Exception as e:
+                    logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
+        
+        # async with self.tg_client as client:
         #     try:
-        #         await self.tg_client.connect()
-        #     except Exception as error:
-        #         logger.error(f"{self.session_name} | (Task) Connect failed: {error}")
-        # try:
-        #     chat = await self.tg_client.get_entity(link)
-        #     chat_username = chat.username if hasattr(chat, 'username') else link
-        #     chat_id = chat.id
-        #     try:
-        #         await self.tg_client.get_permissions(chat)
-        #     except Exception as error:
-        #         if 'CHAT_FORBIDDEN' in str(error):
-        #             await asyncio.sleep(delay=3)
-        #             if '+' in link:
-        #                 response = await self.tg_client(InviteToChannelRequest(link))
+        #         chat = await client(functions.messages.CheckChatInviteRequest(hash=link))
+        #         chat_username = chat.chat.username if hasattr(chat.chat, 'username') else link
+        #         chat_id = chat.chat.id
+
+        #         try:
+        #             await client(functions.channels.GetParticipantRequest(channel=chat_id, user_id='me'))
+        #         except Exception as error:
+        #             if isinstance(error, types.rpc_error.UserNotParticipantError):
+        #                 await asyncio.sleep(delay=3)
+        #                 response = await client(functions.channels.JoinChannelRequest(channel=chat_id))
+        #                 logger.info(f"{self.session_name} | Joined to channel: <y>{response.chats[0].username}</y>")
+                        
+        #                 try:
+        #                     await client(functions.account.UpdateNotifySettingsRequest(
+        #                         peer=chat_id,
+        #                         settings=types.InputPeerNotifySettings(mute_until=2147483647)
+        #                     ))
+        #                     logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
+        #                 except Exception as e:
+        #                     logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
         #             else:
-        #                 response = await self.tg_client(JoinChannelRequest(chat))
-        #             logger.info(f"{self.session_name} | Joined to channel: <y>{chat_username}</y>")
-                    
-        #             try:
-        #                 await self.tg_client(UpdateNotifySettingsRequest(
-        #                     peer=InputNotifyPeer(peer=chat),
-        #                     settings=InputPeerNotifySettings(mute_until=2147483647)
-        #                 ))
-        #                 logger.info(f"{self.session_name} | Successfully muted chat <y>{chat_username}</y>")
-        #             except Exception as e:
-        #                 logger.info(f"{self.session_name} | (Task) Failed to mute chat <y>{chat_username}</y>: {str(e)}")
-        #         else:
-        #             logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
-
-        #     if self.tg_client.is_connected:
-        #         await self.tg_client.disconnect()
-        # except Exception as error:
-        #     logger.error(f"{self.session_name} | (Task) Error while join tg channel: {error}")
-
+        #                 logger.error(f"{self.session_name} | (Task) Error while checking TG group: <y>{chat_username}</y>")
+        #     except errors.InviteHashExpiredError:
+        #         logger.warning(f"{self.session_name} | The invite link for chat <y>{link}</y> has expired or is no longer valid.")
+        #     except Exception as error:
+        #         logger.error(f"{self.session_name} | (Task) Error while join tg channel: {error}")
     
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
