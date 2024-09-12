@@ -4,13 +4,15 @@ import asyncio
 import argparse
 from itertools import cycle
 
-from pyrogram import Client
+from telethon import TelegramClient
 from better_proxy import Proxy
+from bot.core.registrator import register_sessions
 
 from bot.config import settings
 from bot.utils import logger
 from bot.core.tapper import run_tapper
-from bot.core.registrator import register_sessions
+
+global tg_clients
 
 start_text = """
 
@@ -27,13 +29,10 @@ Select an action:
     2. Create session
 """
 
-global tg_clients
-
-
 def get_session_names() -> list[str]:
-    session_files = [f for f in os.listdir('sessions') if f.endswith('.session')]
+    session_names = sorted(glob.glob("sessions/*.session"))
     session_names = [
-        os.path.join('sessions', os.path.splitext(session_file)[0]) for session_file in session_files
+        os.path.splitext(os.path.basename(file))[0] for file in session_names
     ]
 
     return session_names
@@ -48,6 +47,29 @@ def get_proxies() -> list[Proxy]:
 
     return proxies
 
+
+async def get_tg_clients() -> list[TelegramClient]:
+    global tg_clients
+
+    session_names = get_session_names()
+
+    if not session_names:
+        raise FileNotFoundError("Not found session files")
+
+    if not settings.API_ID or not settings.API_HASH:
+        raise ValueError("API_ID and API_HASH not found in the .env file.")
+
+    tg_clients = [
+        TelegramClient(
+            f'sessions/{session_name}',
+            api_id=settings.API_ID,
+            api_hash=settings.API_HASH,
+            system_version='Windows 11'
+        )
+        for session_name in session_names
+    ]
+
+    return tg_clients
 
 async def process() -> None:
     parser = argparse.ArgumentParser()
@@ -72,7 +94,8 @@ async def process() -> None:
                 break
 
     if action == 1:
-        await run_tasks()
+        tg_clients = await get_tg_clients()
+        await run_tasks(tg_clients=tg_clients)
 
     elif action == 2:
         await register_sessions()
@@ -80,12 +103,17 @@ async def process() -> None:
 
 
 
-async def run_tasks():
+async def run_tasks(tg_clients: list[TelegramClient]):
     proxies = get_proxies()
     proxies_cycle = cycle(proxies) if proxies else None
-    tasks = []
-    for session_name in get_session_names():
-        task = asyncio.create_task(run_tapper(session_name, next(proxies_cycle) if proxies_cycle else None))
-        tasks.append(task)
+    tasks = [
+        asyncio.create_task(
+            run_tapper(
+                tg_client=tg_client,
+                proxy=next(proxies_cycle) if proxies_cycle else None,
+            )
+        )
+        for tg_client in tg_clients
+    ]
 
     await asyncio.gather(*tasks)

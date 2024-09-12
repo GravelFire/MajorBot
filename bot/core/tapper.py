@@ -6,19 +6,25 @@ import aiohttp
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 from telethon.tl.functions.messages import RequestAppWebViewRequest
-from telethon.tl.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer
-from telethon import TelegramClient, functions, types
+from telethon.tl.types import InputBotAppShortName
+from telethon import TelegramClient, functions
 from telethon import errors
 import json
 from .agents import generate_random_user_agent
 import socks
+import time
 from bot.config import settings
 from typing import Any, Callable
 import functools
 from bot.utils import logger
 from bot.exceptions import InvalidSession
 from .headers import headers
+import aiofiles
+import os
 
+async def write_to_file(filename, content):
+    async with aiofiles.open(filename, mode='a') as file:
+        await file.write(content + '\n')
 
 def error_handler(func: Callable):
     @functools.wraps(func)
@@ -52,39 +58,69 @@ def proxy_to_dict(proxy: Proxy) -> dict:
 
 
 class Tapper:
-    
-    def __init__(self, session_name: str, proxy: str):
+    def __init__(self, tg_client: TelegramClient, proxy: str):
+        self.app = tg_client
+        full_path = self.app.session.filename
+        file_name_with_extension = full_path.split('/')[-1]
+        self.session_name = file_name_with_extension.split('.')[0]
+        
         self.proxy = proxy
         if self.proxy:
             proxy = Proxy.from_str(proxy)
-            proxy_dict = proxy_to_dict(proxy)
+            self.proxy_dict = proxy_to_dict(proxy)
         else:
-            proxy_dict = None
-        self.tg_client = TelegramClient(session_name, api_id=settings.API_ID, api_hash=settings.API_HASH, proxy=proxy_dict)
-        self.session_name = session_name
-        self.tg_client_id = 0
+            self.proxy_dict = None
+        self.user_id = 0
 
     async def get_tg_web_data(self) -> str:
-        await self.tg_client.connect()
-        ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "339631649"
-        app_info = await self.tg_client(RequestAppWebViewRequest(
-            'me',
-            InputBotAppShortName(await self.tg_client.get_input_entity('major'), 'start'),
-            'android',
-            start_param=ref_id
-        ))
-        web_data = unquote(string=unquote(string=app_info.url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
-        get_me = await self.tg_client.get_me()
-        self.tg_client_id = get_me.id
+        if self.proxy_dict:
+            self.app.proxy = self.proxy_dict
             
-        await self.tg_client.disconnect()
+        try:
+            if not self.app.is_connected():
+                try:
+                    await self.app.connect()
+                except (errors.UnauthorizedError, errors.UserDeletedError, errors.AuthKeyUnregisteredError,
+                        errors.UserDeactivatedError, errors.UserDeactivatedBanError):
+                    raise InvalidSession(self.session_name)
+            while True:
+                try:
+                    peer = await self.app.get_input_entity('major')
+                    break
+                except errors.FloodWaitError as fl:
+                    fls = fl.seconds
+
+                    logger.warning(f"<light-yellow>{self.session_name}</light-yellow> | FloodWait {fl}")
+                    logger.info(f"<light-yellow>{self.session_name}</light-yellow> | Sleep {fls}s")
+
+                    await asyncio.sleep(fls + 3)
+            ref_id = random.choices([settings.REF_ID, "339631649"], weights=[80, 20], k=1)[0]
+            app_info = await self.app(RequestAppWebViewRequest(
+                'me',
+                InputBotAppShortName(peer, 'start'),
+                'android',
+                start_param=ref_id
+            ))
+            web_data = unquote(string=unquote(string=app_info.url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
+            get_me = await self.app.get_me()
+            
+            self.user_id = get_me.id
+                    
+            await self.app.disconnect()
+                
+            return ref_id, web_data
         
-        return ref_id, web_data
+        except InvalidSession as error:
+            raise error
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error: {error}")
+            await asyncio.sleep(delay=3)
         
         
     async def join_and_mute_tg_channel(self, link: str):
         link = link if 'https://t.me/+' in link else link[13:]
-        async with self.tg_client as client:
+        async with self.app as client:
 
             if 'https://t.me/+' in link:
                 try:
@@ -104,7 +140,7 @@ class Tapper:
     
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
-        full_url = url or f"https://major.glados.app/api{endpoint or ''}"
+        full_url = url or f"https://major.bot/api{endpoint or ''}"
         response = await http_client.request(method, full_url, **kwargs)
         response.raise_for_status()
         return await response.json()
@@ -178,7 +214,7 @@ class Tapper:
     
     @error_handler
     async def get_detail(self, http_client):
-        detail = await self.make_request(http_client, 'GET', endpoint=f"/users/{self.tg_client_id}/")
+        detail = await self.make_request(http_client, 'GET', endpoint=f"/users/{self.user_id}/")
         
         return detail.get('rating') if detail else 0
     
@@ -189,6 +225,23 @@ class Tapper:
     @error_handler
     async def get_squad(self, http_client, squad_id):
         return await self.make_request(http_client, 'GET', endpoint=f"/squads/{squad_id}?")
+    
+    @error_handler
+    async def puvel_puzzle(self, http_client):
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py") as response:
+                status = response.status
+                if status == 200:
+                    response_answer = json.loads(await response.text())
+                    if response_answer.get('expires', 0) > int(time.time()):
+                        answer = response_answer.get('answer')
+                        start = await self.make_request(http_client, 'GET', endpoint="/durov/")
+                        if start and start.get('success', False):
+                            logger.info(f"{self.session_name} | Start game <y>Puzzle</y>")
+                            await asyncio.sleep(3)
+                            return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
+        return None
 
     @error_handler
     async def check_proxy(self, http_client: aiohttp.ClientSession) -> None:
@@ -266,21 +319,27 @@ class Tapper:
                 hold_coins = await self.claim_hold_coins(http_client=http_client)
                 if hold_coins:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward HoldCoins: <y>{hold_coins}</y>")
+                    logger.info(f"{self.session_name} | Reward HoldCoins: <y>+{hold_coins}⭐</y>")
                 await asyncio.sleep(10)
                 
                 
                 swipe_coins = await self.claim_swipe_coins(http_client=http_client)
                 if swipe_coins:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward SwipeCoins: <y>{swipe_coins}</y>")
+                    logger.info(f"{self.session_name} | Reward SwipeCoins: <y>+{swipe_coins}⭐</y>")
                 await asyncio.sleep(10)
                 
                 
                 roulette = await self.claim_roulette(http_client=http_client)
                 if roulette:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward Roulette : <y>{roulette}</y>")
+                    logger.info(f"{self.session_name} | Reward Roulette : <y>+{roulette}⭐</y>")
+                await asyncio.sleep(10)
+                
+                puzzle = await self.puvel_puzzle(http_client=http_client)
+                if puzzle:
+                    await asyncio.sleep(1)
+                    logger.info(f"{self.session_name} | Reward Puzzle Pavel: <y>+5000⭐</y>")
                 await asyncio.sleep(10)
                 
                 
@@ -331,8 +390,8 @@ class Tapper:
             
         
 
-async def run_tapper(session_name: str, proxy: str | None):
+async def run_tapper(tg_client: TelegramClient, proxy: str | None):
     try:
-        await Tapper(session_name=session_name, proxy=proxy).run()
+        await Tapper(tg_client=tg_client, proxy=proxy).run()
     except InvalidSession:
-        logger.error(f"{session_name} | Invalid Session")
+        logger.error(f"{tg_client} | Invalid Session")

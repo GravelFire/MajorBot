@@ -1,5 +1,5 @@
 from telethon import TelegramClient
-
+from telethon.errors import SessionPasswordNeededError
 from bot.config import settings
 from bot.utils import logger
 
@@ -17,12 +17,14 @@ async def register_sessions() -> None:
         return None
 
     session = TelegramClient(
-        session=f"sessions/{session_name}",
+        f'sessions/{session_name}',
         api_id=API_ID,
-        api_hash=API_HASH
+        api_hash=API_HASH,
+        system_version='Windows 11'
     )
 
-    session.start(password=lambda: input('Please enter your password: '))
+    await session.start(password=lambda: input('Please enter your password: '))
+
     user_data = await session.get_me()
 
     logger.success(f'Session added successfully @{user_data.username} | {user_data.first_name} {user_data.last_name}')
