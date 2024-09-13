@@ -87,7 +87,7 @@ async def get_tg_clients() -> list[TelegramClient]:
     list_client_with_proxy = []
     
     for session_name in session_names:
-        proxy = next(proxies_cycle)
+        proxy = Proxy.from_str(next(proxies_cycle))
         tg_client = TelegramClient(
             f'sessions/{session_name}',
             api_id=settings.API_ID,
