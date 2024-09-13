@@ -35,28 +35,6 @@ def error_handler(func: Callable):
             await asyncio.sleep(1)
     return wrapper
 
-
-def proxy_to_dict(proxy: Proxy) -> dict:
-    proxy_type_map = {
-        'http': socks.HTTP,
-        'socks': socks.SOCKS5
-    }
-
-    proxy_dict = {
-        'proxy_type': proxy_type_map.get(proxy.protocol, socks.HTTP),
-        'addr': proxy.host,
-        'port': proxy.port,
-    }
-
-    if proxy.login:
-        proxy_dict['username'] = proxy.login
-    if proxy.password:
-        proxy_dict['password'] = proxy.password
-
-    return proxy_dict
-
-
-
 class Tapper:
     def __init__(self, tg_client: TelegramClient, proxy: str):
         self.app = tg_client
@@ -67,15 +45,11 @@ class Tapper:
         self.proxy = proxy
         if self.proxy:
             proxy = Proxy.from_str(proxy)
-            self.proxy_dict = proxy_to_dict(proxy)
         else:
             self.proxy_dict = None
         self.user_id = 0
 
     async def get_tg_web_data(self) -> str:
-        if self.proxy_dict:
-            self.app.proxy = self.proxy_dict
-            
         try:
             if not self.app.is_connected():
                 try:
