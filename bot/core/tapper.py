@@ -79,8 +79,9 @@ class Tapper:
             get_me = await self.app.get_me()
             
             self.user_id = get_me.id
-                    
-            await self.app.disconnect()
+
+            if self.app.is_connected():
+                await self.app.disconnect()
                 
             return ref_id, web_data
         
